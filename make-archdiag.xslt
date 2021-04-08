@@ -49,6 +49,16 @@ want.
 		<xsl:with-param name="std-name" select="@name"/>
 		<xsl:with-param name="std-class">thisrec</xsl:with-param>
 	</xsl:call-template>
+	<svg>
+		<xsl:attribute name="x">
+			<xsl:value-of select="@x"/>
+		</xsl:attribute>
+		<xsl:attribute name="y">
+			<xsl:value-of select="@y"/>
+		</xsl:attribute>
+		<ellipse rx="60" ry="15" cx="45" cy="9" fill="none" stroke="red"
+			stroke-width="3"/>
+	</svg>
 </xsl:template>
 
 <xsl:template match="ad:rec">
@@ -75,6 +85,33 @@ want.
 	<svg  version="2.0"
 		width="800" height="600">
 		<defs>
+			<script type="text/javascript">
+			function adjustBoxWidthsForClass(cls) {
+				var recs = document.getElementsByClassName(cls);
+				for (var index in recs) {
+					if (!recs[index].nextSibling || !recs[index].nextSibling.getBBox) {
+						// for some reason we have a 'rec' box not followed by text;
+						// let's skip this for now an see if this bites someone.
+						continue;
+					}
+					var bbox = recs[index].nextSibling.getBBox();
+					var newWidth = bbox.width+6;
+					recs[index].width.baseVal.value = newWidth;
+					recs[index].x.baseVal.value += (90-newWidth)/2;
+				}
+			}
+
+			function adjustBoxWidths() {
+				// Regrettably, SVG doesn't seem to have a facility to bboxes
+				// around text.  We fake this here using javascript, to be
+				// called when the text is rendered.
+				adjustBoxWidthsForClass('rec');
+				adjustBoxWidthsForClass('prerec');
+			}
+
+			window.addEventListener("load", adjustBoxWidths, false);
+			</script>
+
 			<style type="text/css">
 				@font-face {
 					font-family: "Liberation Sans Narrow";
@@ -89,12 +126,11 @@ want.
 				rect.rec {
 					fill: #bbe0e3;
 					stroke: #0000ff;
+					stroke-width:1;
 				}
 
 				rect.thisrec {
-					fill: #bbe0e3;
-					stroke: #ff0000;
-					stroke-width: 2;
+					fill: #ccf0f4;
 				}
 
 				rect.prerec {
@@ -108,6 +144,10 @@ want.
 					font-family: Liberation Sans Narrow;
 					font-size: 11px;
 					text-anchor:middle;
+				}
+
+				svg {
+					overflow: auto;
 				}
 			</style>
 		</defs>

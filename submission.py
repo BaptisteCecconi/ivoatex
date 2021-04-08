@@ -5,7 +5,7 @@ A little script to operate the IVOA submission form with data scrubbed
 from ivoatex sources.
 
 The keys used here are taken from screen-scraping 
-http://www.ivoa.net/cgi-bin/up.cgi (which is also the target to POST
+https://www.ivoa.net/cgi-bin/up.cgi (which is also the target to POST
 to).
 
 Fields needed:
@@ -42,7 +42,7 @@ except ImportError:
 		"*** https://pypi.python.org/pypi/requests")
 
 
-DOCREPO_URL = 'http://www.ivoa.net/cgi-bin/up.cgi' 
+DOCREPO_URL = 'https://www.ivoa.net/cgi-bin/up.cgi' 
 
 
 class ReportableError(Exception):
@@ -59,7 +59,7 @@ def H(el_name):
 def to_text(el):
 	"""returns a concatenation of the text contents of el and its sub-elements.
 	"""
-	return "".join(el.itertext()).strip().encode("utf-8")
+	return "".join(el.itertext()).strip()
 
 
 class DocumentMeta(object):
@@ -75,7 +75,7 @@ class DocumentMeta(object):
 		"year", "month", "day", "doctype"]
 	
 	def __init__(self, **kwargs):
-		for k, v in kwargs.iteritems():
+		for k, v in kwargs.items():
 			setattr(self, k, v)
 		self._authors = []
 		self._editors = []
@@ -101,7 +101,7 @@ class DocumentMeta(object):
 	def add_info_from_document(self):
 		"""tries to obtain missing metadata from the formatted (XHTML) source.
 		"""
-		with open(self.conciseName+".html") as f:
+		with open(self.conciseName+".html", "rb") as f:
 			tree = etree.parse(f)
 
 		# The following would be a bit smoother if we had xpath; there's
@@ -143,7 +143,7 @@ class DocumentMeta(object):
 		from the makefile filled in.
 		"""
 		meta_keys = {}
-		with open("Makefile") as f:
+		with open("Makefile", encoding="utf-8") as f:
 			for ln in f:
 				mat = re.match("(\w+)\s*=\s*(.*)", ln)
 				if mat:
@@ -198,9 +198,9 @@ class DocumentMeta(object):
 		"""
 		if self.group:
 			return self.group
-		if wg_string not in self._wg_mapping:
+		if wg_string not in self._wg_mapping.keys():
 			raise ReportableError("ivoagroup must be one of %s.  If this is"
-				" really inappropriate, set IVOA_GROUP =No Group in the Makefile"%
+				" really inappropriate, set IVOA_GROUP = No Group in the Makefile"%
 				", ".join(self._wg_mapping.keys()))
 		return self._wg_mapping[wg_string]
 
@@ -243,10 +243,10 @@ def review_and_comment(document_meta):
 
 	fd, path_name = comment_src = tempfile.mkstemp()
 	try:
-		os.write(fd, "# optionally enter comment(s) below.\n")
+		os.write(fd, b'# optionally enter comment(s) below.\n')
 		os.close(fd)
 		subprocess.check_call([editor, path_name])
-		with open(path_name) as f:
+		with open(path_name, encoding="utf-8") as f:
 			document_meta.comment = re.sub("(?m)^#.*$", "", f.read())
 	finally:
 		os.unlink(path_name)
@@ -261,7 +261,7 @@ def review_and_comment(document_meta):
 		document_meta.get_date()))
 	print("Hit ^C if this (or anthing in the dict above) is wrong,"
 		" enter to upload.")
-	raw_input()
+	input()
 
 
 def main(archive_file_name):
@@ -271,13 +271,13 @@ def main(archive_file_name):
 	sys.stdout.write("Uploading... ")
 	sys.stdout.flush()
 
-	with open(sys.argv[1]) as upload:
+	with open(sys.argv[1], "rb") as upload:
 		resp = requests.post(DOCREPO_URL, 
 			data=document_meta.get_post_payload(),
 			files=[('filename', (sys.argv[1], upload))])
 
 	sys.stdout.write("done (result in docrepo-response.html)\n")
-	with open("docrepo-response.html", "w") as f:
+	with open("docrepo-response.html", "w", encoding="utf-8") as f:
 		f.write(resp.text)
 
 
@@ -287,6 +287,6 @@ if __name__=="__main__":
 			raise ReportableError(
 				"Usage: %s <upload package file name>"%sys.argv[0])
 		main(sys.argv[1])
-	except ReportableError, msg:
+	except ReportableError as msg:
 		sys.stderr.write("*** Failure while preparing submission:\n")
 		sys.exit(msg)

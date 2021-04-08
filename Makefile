@@ -12,7 +12,9 @@
 
 IVOATEX_VERSION = 1.1
 
-CSS_HREF = http://www.ivoa.net/misc/ivoa_doc.css
+.DELETE_ON_ERROR:
+
+CSS_HREF = https://www.ivoa.net/misc/ivoa_doc.css
 TTH = ivoatex/tth_C/tth
 ARCHIVE_FILES = $(DOCNAME).tex $(DOCNAME).pdf $(DOCNAME).html $(FIGURES)
 PYTHON?=python3
@@ -21,17 +23,23 @@ PYTHON?=python3
 #     XSLT processor
 #     C compiler
 #     GNU make (or another sufficiently powerful make)
-#     pdflatex
+#     texlive
 #     ghostscript (if you plan on postscript/pdf figures)
 #     zip
-#     librsvg2-bin (to teach convert to turn svg to pdf, the arch diagram)
-#  All of these are likely present on, e.g., a linux distribution,
-#  except for librsvg, which is part of the gnome svg toolkit.
-#  Hence, please commit both role_diagram.svg and role_diagram.pdf into
-#  your VCS.
+#     inkscape if you need an architecture diagram
+#     pdftk if you want to build draft pdfs with a watermark
+#     optionally, latexmk.
+#  Since inkscape is a rather exotic dependency, please commit both 
+#  role_diagram.svg and role_diagram.pdf into your VCS for now.
+
 XSLTPROC = xsltproc
 XMLLINT = xmllint -noout
-PDFLATEX = pdflatex
+LATEXMK_BANNER := $(shell latexmk --version 2> /dev/null)
+ifdef LATEXMK_BANNER
+	PDFLATEX = latexmk -pdf
+else
+	PDFLATEX = pdflatex
+endif
 CONVERT = convert
 ZIP = zip
 
@@ -57,10 +65,14 @@ GENERATED_PNGS = $(VECTORFIGURES:pdf=png)
 $(DOCNAME).pdf: ivoatexmeta.tex $(SOURCES) $(FIGURES) $(VECTORFIGURES)
 	$(PDFLATEX) $(DOCNAME)
 
-
 forcetex:
-	$(PDFLATEX) $(DOCNAME)   # && $(PDFLATEX) $(DOCNAME) && $(PDFLATEX) $(DOCNAME)
+	make -W $(DOCNAME).tex $(DOCNAME).pdf
 
+$(DOCNAME)-draft.pdf: $(DOCNAME).pdf draft-background.pdf
+	pdftk $< background draft-background.pdf output $@
+
+draft-background.pdf: ivoatex/draft-background.tex
+	pdflatex $<
 
 arxiv-upload: $(SOURCES) biblio $(FIGURES) $(VECTORFIGURES) ivoatexmeta.tex
 	mkdir -p stuff-for-arxiv/ivoatex
@@ -80,6 +92,10 @@ clean:
 	rm -f *.bbl *.blg *.out debug.html
 	rm -f arxiv-upload.tar.gz
 	rm -f $(GENERATED_PNGS)
+
+update:
+	@echo "*** updating ivoatex from github"
+	git submodule update --remote
 
 .FORCE:
 
@@ -112,10 +128,14 @@ $(DOCNAME).html: $(DOCNAME).pdf ivoatex/tth-ivoa.xslt $(TTH) \
 #		| tee debug.html \
 
 $(DOCNAME).bbl: $(DOCNAME).tex ivoatex/ivoabib.bib ivoatexmeta.tex
+ifdef LATEXMK_BANNER
+	$(PDFLATEX) -bibtex $(DOCNAME).tex
+else
 	-$(PDFLATEX) -interaction batchmode $(DOCNAME).tex
 	bibtex $(DOCNAME).aux
-	$(PDFLATEX) -interaction batchmode $(DOCNAME).tex 2>&1 >/dev/null
+	-$(PDFLATEX) -interaction batchmode $(DOCNAME).tex 2>&1 >/dev/null
 	$(PDFLATEX) -interaction scrollmode $(DOCNAME).tex
+endif
 
 # We don't let the pdf depend on .bbl, as we don't want to run BibTeX
 # every time the TeX input is changed.  The idea is that when people do
@@ -165,7 +185,7 @@ endif
 
 
 upload: package
-	python ivoatex/submission.py $(versionedName).zip
+	$(PYTHON) ivoatex/submission.py $(versionedName).zip
 
 
 #  Build TtH from source.  See http://hutchinson.belmont.ma.us/tth/.
@@ -221,5 +241,40 @@ ivoatex-installdist: $(IVOATEX_ARCHIVE)
 
 # re-gets the ivoa records from ADS
 docrepo.bib:
-	curl -o "$@" "http://adsabs.harvard.edu/cgi-bin/nph-abs_connect?db_key=ALL&warnings=YES&version=1&bibcode=%3F%3F%3F%3Fivoa.spec%0D%0A%3F%3F%3F%3Fivoa.rept&nr_to_return=1000&start_nr=1&data_type=BIBTEX&use_text=YES"
-	
+	python3 fetch_from_ads.py
+
+############# GitHub workflows configuration
+
+.PHONY: github-preview
+
+GITHUB_WORKFLOWS        = .github/workflows
+GITHUB_BUILD            = $(GITHUB_WORKFLOWS)/build.yml
+GITHUB_PREVIEW          = $(GITHUB_WORKFLOWS)/preview.yml
+GITHUB_BUILD_TEMPLATE   = ivoatex/github_workflow_build.yml.template
+GITHUB_PREVIEW_TEMPLATE = ivoatex/github_workflow_preview.yml.template
+
+$(GITHUB_WORKFLOWS):
+	@mkdir -p $@
+
+$(GITHUB_BUILD): $(GITHUB_WORKFLOWS) $(GITHUB_BUILD_TEMPLATE)
+	@sed "s!^\(\s*doc_name:\)!\1 $(DOCNAME)!g" $(GITHUB_BUILD_TEMPLATE) > $@
+	@git add "$@"
+	@echo -e "* GitHub Workflow for PDF preview in PullRequest configured:\n      $@"
+	@echo '  => Run "git commit && git push" to enable GitHub PDF preview.'
+
+$(GITHUB_PREVIEW): $(GITHUB_WORKFLOWS) $(GITHUB_PREVIEW_TEMPLATE)
+	@sed "s!^\(\s*doc_name:\)!\1 $(DOCNAME)!g" $(GITHUB_PREVIEW_TEMPLATE) > $@
+	@git add "$@"
+	@echo -e "* GitHub Workflow for PDF preview at pushed commit configured:\n\
+	        $@\n\
+	  -----------------------------------------------------------------------\n\
+	    Clickable badge toward the generated PDF preview:\n\n\
+	        [![PDF-Preview](https://img.shields.io/badge/Preview-PDF-blue)]\
+	(../../releases/download/auto-pdf-preview/$(DOCNAME)-draft.pdf)\n\n\
+	    You can add it into your README.md to give an easy way to access\n\
+	    the PDF preview to your users.\n\
+	  -----------------------------------------------------------------------"
+	@echo '  => Run "git commit && git push" to enable GitHub PDF preview.'
+
+github-preview: $(GITHUB_BUILD) $(GITHUB_PREVIEW)
+

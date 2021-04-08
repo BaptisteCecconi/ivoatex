@@ -87,15 +87,17 @@
   \verbatiminput{#2}
   \special{html:</div>}
 }
+\newcommand{\lstinline}[1]{\special{html:<code>}#1\special{html:</code>}}
 \newcommand{\lstloadlanguages}[1]{}
 \newcommand{\lstset}[1]{}
 
 \newenvironment{lstlisting}[1][plain]
   {\special{html:<div keyvals="#1">}\tthverbatim{lstlisting}}
   {\special{html:</div>}}
-
-\newcommand{\nolinkurl}[1]{
-	\special{html:<span class='nolinkurl'>}#1\special{html:</span>}}
+ 
+\def\nolinkurl#1{\special{html:<span class="nolinkurl">}%
+  \verb|#1|%
+  \special{html:</span>}}
 
 \newenvironment{bigdescription}{%
     \begin{html}<div class="bigdescription">\end{html}
@@ -122,6 +124,8 @@
 
 \newcommand{\todo}[2][None]{%
   \begin{html}<span class="redaction">#2</span>\end{html}}
+
+\newenvironment{SCfigure}{\begin{figure}}{\end{figure}}
 
 \newcommand{\ivoatex}{%
   \special{html:<span class="ivoatex">IVOAT<sub>E</sub>X</span>}}
@@ -161,6 +165,12 @@
 \newbox\voidb@x
 \def\@m{\relax}
 
+% The default rendering of the captions is really ugly, and so I need to
+% fiddle in some HTML to let me style it.  I frankly cannot quite
+% say what tth things the first argument to caption would be in
+% the following definition; let's consider it an implementation detail.
+\newcommand\caption[2][]{\special{html:<div class="caption">}%
+  \tthcaption{#2}\special{html:</div>}}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%% Now open up titlepage metadata
 \begin{html}
